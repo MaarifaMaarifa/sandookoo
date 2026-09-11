@@ -1,4 +1,6 @@
-use iced::widget::{button, center, column, container, row, scrollable, text, text_editor, text_input};
+use iced::widget::{
+    button, center, column, container, row, scrollable, table, text, text_editor, text_input,
+};
 use iced::{Alignment, Color, Element, Length, Task};
 use sea_orm::DatabaseConnection;
 
@@ -23,6 +25,7 @@ pub enum Message {
     NewConnectionDatabaseChanged(String),
     SubmitNewConnectionForm,
     ConnectionEstablished(String, Result<DatabaseConnection, gui_state::GuiStateError>),
+    QueryFinished(gui_state::QueryOutcome),
 }
 
 impl Gui {
@@ -36,7 +39,14 @@ impl Gui {
         match message {
             Message::SelectConnection(name) => self.state.select_connection(name),
             Message::QueryEditorAction(action) => self.state.perform_query_action(action),
-            Message::RunQuery => self.state.run_query(),
+            Message::RunQuery => {
+                if let Some((connection, sql)) = self.state.start_query() {
+                    return Task::perform(
+                        gui_state::run_query(connection, sql),
+                        Message::QueryFinished,
+                    );
+                }
+            }
             Message::OpenNewConnectionForm => self.state.open_new_connection_form(),
             Message::CancelNewConnectionForm => self.state.cancel_new_connection_form(),
             Message::NewConnectionNameChanged(value) => {
@@ -87,6 +97,7 @@ impl Gui {
                     .state
                     .set_new_connection_error("Failed to connect to the database.".to_string()),
             },
+            Message::QueryFinished(outcome) => self.state.set_query_outcome(outcome),
         }
 
         Task::none()
@@ -167,12 +178,7 @@ impl Gui {
         .height(Length::FillPortion(2))
         .style(container::bordered_box);
 
-        let results_text = match self.state.query_result() {
-            gui_state::QueryResult::Empty => "Results will appear here.".to_string(),
-            gui_state::QueryResult::Message(message) => message.clone(),
-        };
-
-        let results = container(scrollable(text(results_text)))
+        let results = container(results_view(self.state.query_result()))
             .width(Length::Fill)
             .height(Length::FillPortion(1))
             .padding(8)
@@ -182,6 +188,26 @@ impl Gui {
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+}
+
+fn results_view(outcome: &gui_state::QueryOutcome) -> Element<'_, Message> {
+    match outcome {
+        gui_state::QueryOutcome::Empty => center(text("Results will appear here.")).into(),
+        gui_state::QueryOutcome::Message(message) => center(text(message.clone())).into(),
+        gui_state::QueryOutcome::Rows { columns, rows } => {
+            if rows.is_empty() {
+                return center(text("Query returned no rows.")).into();
+            }
+
+            let table_columns = columns.iter().enumerate().map(|(index, name)| {
+                table::column(text(name.clone()), move |row: Vec<String>| {
+                    text(row[index].clone())
+                })
+            });
+
+            scrollable(table(table_columns, rows.clone())).into()
+        }
     }
 }
 

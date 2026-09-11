@@ -1,16 +1,21 @@
 use std::collections::HashMap;
 
 use iced::widget::text_editor;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiStateError {
     DatabaseConnectionError,
 }
 
-pub enum QueryResult {
+#[derive(Debug, Clone)]
+pub enum QueryOutcome {
     Empty,
     Message(String),
+    Rows {
+        columns: Vec<String>,
+        rows: Vec<Vec<String>>,
+    },
 }
 
 #[derive(Default)]
@@ -38,7 +43,7 @@ pub struct GuiState {
     databases: Databases,
     selected_connection: Option<String>,
     query_editor: text_editor::Content,
-    query_result: QueryResult,
+    query_result: QueryOutcome,
     new_connection_form: Option<NewConnectionForm>,
 }
 
@@ -48,7 +53,7 @@ impl GuiState {
             databases: Databases::new(),
             selected_connection: None,
             query_editor: text_editor::Content::new(),
-            query_result: QueryResult::Empty,
+            query_result: QueryOutcome::Empty,
             new_connection_form: None,
         }
     }
@@ -73,16 +78,36 @@ impl GuiState {
         self.query_editor.perform(action);
     }
 
-    pub fn query_result(&self) -> &QueryResult {
+    pub fn query_result(&self) -> &QueryOutcome {
         &self.query_result
     }
 
-    pub fn run_query(&mut self) {
-        // Query execution isn't wired up yet; surface a placeholder instead.
-        self.query_result = QueryResult::Message(match self.selected_connection {
-            Some(_) => "Query execution isn't implemented yet.".to_string(),
-            None => "Select a connection first.".to_string(),
-        });
+    pub fn set_query_outcome(&mut self, outcome: QueryOutcome) {
+        self.query_result = outcome;
+    }
+
+    /// Picks up the connection to query and the SQL to run, if a connection
+    /// is selected and the editor isn't empty. Also sets an immediate
+    /// "running" message so the results panel gives feedback right away.
+    pub fn start_query(&mut self) -> Option<(DatabaseConnection, String)> {
+        let sql = self.query_editor.text();
+        if sql.trim().is_empty() {
+            self.query_result = QueryOutcome::Message("Write a query first.".to_string());
+            return None;
+        }
+
+        let Some(name) = self.selected_connection.as_ref() else {
+            self.query_result = QueryOutcome::Message("Select a connection first.".to_string());
+            return None;
+        };
+        let connection = self
+            .databases
+            .get(name)
+            .expect("selected connection always exists in databases")
+            .clone();
+
+        self.query_result = QueryOutcome::Message("Running query...".to_string());
+        Some((connection, sql))
     }
 
     pub fn new_connection_form(&self) -> Option<&NewConnectionForm> {
@@ -186,6 +211,10 @@ impl Databases {
         self.databases.insert(name, connection);
     }
 
+    pub fn get(&self, name: &str) -> Option<&DatabaseConnection> {
+        self.databases.get(name)
+    }
+
     pub fn names(&self) -> impl Iterator<Item = &String> {
         self.databases.keys()
     }
@@ -200,4 +229,69 @@ impl Databases {
             .await
             .map_err(|_| GuiStateError::DatabaseConnectionError)
     }
+}
+
+/// Runs `sql` against `connection` and turns the outcome into something the
+/// results panel can render. `SELECT`/`WITH` statements are fetched as rows;
+/// anything else is executed and reported as an affected-row count.
+pub async fn run_query(connection: DatabaseConnection, sql: String) -> QueryOutcome {
+    let trimmed = sql.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let is_select = lower.starts_with("select") || lower.starts_with("with");
+
+    let statement = Statement::from_string(DatabaseBackend::Postgres, trimmed.to_string());
+
+    if is_select {
+        match connection.query_all_raw(statement).await {
+            Ok(rows) => rows_to_outcome(rows),
+            Err(error) => QueryOutcome::Message(format!("Query failed: {error}")),
+        }
+    } else {
+        match connection.execute_raw(statement).await {
+            Ok(result) => {
+                QueryOutcome::Message(format!("{} row(s) affected.", result.rows_affected()))
+            }
+            Err(error) => QueryOutcome::Message(format!("Query failed: {error}")),
+        }
+    }
+}
+
+fn rows_to_outcome(rows: Vec<sea_orm::QueryResult>) -> QueryOutcome {
+    let columns = rows
+        .first()
+        .map(sea_orm::QueryResult::column_names)
+        .unwrap_or_default();
+
+    let rows = rows
+        .iter()
+        .map(|row| {
+            (0..columns.len())
+                .map(|index| cell_to_string(row, index))
+                .collect()
+        })
+        .collect();
+
+    QueryOutcome::Rows { columns, rows }
+}
+
+/// Best-effort, type-erased stringification of a cell: tries the common
+/// column types in turn since `sea_orm` has no single "get as string" API.
+fn cell_to_string(row: &sea_orm::QueryResult, index: usize) -> String {
+    macro_rules! try_type {
+        ($ty:ty) => {
+            if let Ok(value) = row.try_get_by_index::<Option<$ty>>(index) {
+                return value.map_or_else(|| "NULL".to_string(), |value| value.to_string());
+            }
+        };
+    }
+
+    try_type!(String);
+    try_type!(i64);
+    try_type!(i32);
+    try_type!(i16);
+    try_type!(f64);
+    try_type!(f32);
+    try_type!(bool);
+
+    "<unreadable>".to_string()
 }
