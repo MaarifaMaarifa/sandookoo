@@ -1,31 +1,165 @@
 use std::collections::HashMap;
 
+use iced::widget::text_editor;
 use sea_orm::DatabaseConnection;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiStateError {
-    DatabaseAlreadyExists,
     DatabaseConnectionError,
+}
+
+pub enum QueryResult {
+    Empty,
+    Message(String),
+}
+
+#[derive(Default)]
+pub struct NewConnectionForm {
+    pub name: String,
+    pub host: String,
+    pub port: String,
+    pub username: String,
+    pub password: String,
+    pub database: String,
+    pub error: Option<String>,
+}
+
+impl NewConnectionForm {
+    fn new() -> Self {
+        Self {
+            host: "localhost".to_string(),
+            port: "5432".to_string(),
+            ..Self::default()
+        }
+    }
 }
 
 pub struct GuiState {
     databases: Databases,
+    selected_connection: Option<String>,
+    query_editor: text_editor::Content,
+    query_result: QueryResult,
+    new_connection_form: Option<NewConnectionForm>,
 }
 
 impl GuiState {
     pub fn new() -> Self {
         Self {
             databases: Databases::new(),
+            selected_connection: None,
+            query_editor: text_editor::Content::new(),
+            query_result: QueryResult::Empty,
+            new_connection_form: None,
         }
     }
 
     pub fn get_databases(&self) -> &Databases {
         &self.databases
     }
+
+    pub fn selected_connection(&self) -> Option<&str> {
+        self.selected_connection.as_deref()
+    }
+
+    pub fn select_connection(&mut self, name: String) {
+        self.selected_connection = Some(name);
+    }
+
+    pub fn query_editor(&self) -> &text_editor::Content {
+        &self.query_editor
+    }
+
+    pub fn perform_query_action(&mut self, action: text_editor::Action) {
+        self.query_editor.perform(action);
+    }
+
+    pub fn query_result(&self) -> &QueryResult {
+        &self.query_result
+    }
+
+    pub fn run_query(&mut self) {
+        // Query execution isn't wired up yet; surface a placeholder instead.
+        self.query_result = QueryResult::Message(match self.selected_connection {
+            Some(_) => "Query execution isn't implemented yet.".to_string(),
+            None => "Select a connection first.".to_string(),
+        });
+    }
+
+    pub fn new_connection_form(&self) -> Option<&NewConnectionForm> {
+        self.new_connection_form.as_ref()
+    }
+
+    pub fn new_connection_form_mut(&mut self) -> Option<&mut NewConnectionForm> {
+        self.new_connection_form.as_mut()
+    }
+
+    pub fn open_new_connection_form(&mut self) {
+        self.new_connection_form = Some(NewConnectionForm::new());
+    }
+
+    pub fn cancel_new_connection_form(&mut self) {
+        self.new_connection_form = None;
+    }
+
+    pub fn set_new_connection_error(&mut self, error: String) {
+        if let Some(form) = self.new_connection_form.as_mut() {
+            form.error = Some(error);
+        }
+    }
+
+    /// Validates the open form and, if valid, returns the connection name
+    /// together with the config to connect with.
+    pub fn validate_new_connection_form(&self) -> Result<(String, DatabaseConfig), String> {
+        let form = self
+            .new_connection_form
+            .as_ref()
+            .expect("validate_new_connection_form called without an open form");
+
+        let name = form.name.trim().to_string();
+        if name.is_empty() {
+            return Err("Connection name is required.".to_string());
+        }
+        if self.databases.contains(&name) {
+            return Err("A connection with this name already exists.".to_string());
+        }
+
+        let host = form.host.trim().to_string();
+        if host.is_empty() {
+            return Err("Host is required.".to_string());
+        }
+
+        let port: u16 = form
+            .port
+            .trim()
+            .parse()
+            .map_err(|_| "Port must be a number between 0 and 65535.".to_string())?;
+
+        let database = form.database.trim().to_string();
+        if database.is_empty() {
+            return Err("Database name is required.".to_string());
+        }
+
+        Ok((
+            name,
+            DatabaseConfig {
+                host,
+                port,
+                username: form.username.trim().to_string(),
+                password: form.password.clone(),
+                database,
+            },
+        ))
+    }
+
+    /// Registers a newly established connection and closes the form.
+    pub fn finish_new_connection(&mut self, name: String, connection: DatabaseConnection) {
+        self.databases.insert(name.clone(), connection);
+        self.selected_connection = Some(name);
+        self.new_connection_form = None;
+    }
 }
 
 pub struct DatabaseConfig {
-    pub name: String,
     pub host: String,
     pub port: u16,
     pub username: String,
@@ -44,32 +178,26 @@ impl Databases {
         }
     }
 
-    pub async fn add_database(
-        &mut self,
-        name: String,
-        database_config: DatabaseConfig,
-    ) -> Result<(), GuiStateError> {
-        if self.databases.contains_key(&name) {
-            return Err(GuiStateError::DatabaseAlreadyExists);
-        }
+    pub fn contains(&self, name: &str) -> bool {
+        self.databases.contains_key(name)
+    }
 
-        // build postgres string
+    pub fn insert(&mut self, name: String, connection: DatabaseConnection) {
+        self.databases.insert(name, connection);
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &String> {
+        self.databases.keys()
+    }
+
+    pub async fn connect(config: DatabaseConfig) -> Result<DatabaseConnection, GuiStateError> {
         let postgres_url = format!(
             "postgres://{}:{}@{}:{}/{}",
-            database_config.username,
-            database_config.password,
-            database_config.host,
-            database_config.port,
-            database_config.database
+            config.username, config.password, config.host, config.port, config.database
         );
 
-        // connect to database
-        let db = sea_orm::Database::connect(postgres_url)
+        sea_orm::Database::connect(postgres_url)
             .await
-            .map_err(|_| GuiStateError::DatabaseConnectionError)?;
-
-        self.databases.insert(name, db);
-
-        Ok(())
+            .map_err(|_| GuiStateError::DatabaseConnectionError)
     }
 }
