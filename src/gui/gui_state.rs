@@ -292,6 +292,13 @@ fn cell_to_string(row: &sea_orm::QueryResult, index: usize) -> String {
     try_type!(f64);
     try_type!(f32);
     try_type!(bool);
+    try_type!(sea_orm::prelude::Uuid);
+    try_type!(sea_orm::prelude::Decimal);
+    try_type!(sea_orm::prelude::DateTimeWithTimeZone);
+    try_type!(sea_orm::prelude::DateTimeUtc);
+    try_type!(sea_orm::prelude::DateTime);
+    try_type!(sea_orm::prelude::Date);
+    try_type!(sea_orm::prelude::Time);
 
     "<unreadable>".to_string()
 }
