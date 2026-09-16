@@ -83,5 +83,5 @@ impl Settings {
 }
 
 fn path() -> Option<PathBuf> {
-    ProjectDirs::from("", "", "Sandookoo").map(|dirs| dirs.config_dir().join("settings.toml"))
+    ProjectDirs::from("", "", crate::APP_NAME).map(|dirs| dirs.config_dir().join("settings.toml"))
 }

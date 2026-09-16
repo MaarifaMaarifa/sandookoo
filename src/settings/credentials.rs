@@ -1,8 +1,6 @@
 use keyring::Entry;
 
-/// The keychain service name every connection's password is stored under;
-/// the account is the connection's name.
-const SERVICE: &str = "Sandookoo";
+use crate::APP_NAME;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CredentialError {
@@ -10,11 +8,13 @@ pub enum CredentialError {
     Keyring(#[from] keyring::Error),
 }
 
+/// Every connection's password is stored under the app's keychain service;
+/// the account is the connection's name.
 pub fn save_password(connection_name: &str, password: &str) -> Result<(), CredentialError> {
-    Entry::new(SERVICE, connection_name)?.set_password(password)?;
+    Entry::new(APP_NAME, connection_name)?.set_password(password)?;
     Ok(())
 }
 
 pub fn load_password(connection_name: &str) -> Result<String, CredentialError> {
-    Ok(Entry::new(SERVICE, connection_name)?.get_password()?)
+    Ok(Entry::new(APP_NAME, connection_name)?.get_password()?)
 }
