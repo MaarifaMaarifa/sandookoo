@@ -123,7 +123,12 @@ fn results_view(outcome: &QueryOutcome) -> Element<'_, Message> {
                 })
             });
 
-            scrollable(table(table_columns, rows.clone())).into()
+            scrollable(table(table_columns, rows.clone()))
+                .direction(scrollable::Direction::Both {
+                    vertical: scrollable::Scrollbar::default(),
+                    horizontal: scrollable::Scrollbar::default(),
+                })
+                .into()
         }
     }
 }
