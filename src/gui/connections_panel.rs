@@ -180,17 +180,26 @@ impl State {
     }
 
     pub fn view<'a>(&'a self, shared: &'a GuiState) -> Element<'a, Message> {
-        let content = match &self.new_connection_form {
-            Some(form) => new_connection_form_view(form),
-            None => self.connections_list(shared),
-        };
-
-        container(content)
+        container(self.connections_list(shared))
             .width(Length::Fixed(240.0))
             .height(Length::Fill)
             .padding(style::space::MD)
             .style(style::panel)
             .into()
+    }
+
+    /// The "new connection" dialog, to be shown as a modal over the whole
+    /// app while the form is open.
+    pub fn modal(&self) -> Option<Element<'_, Message>> {
+        let form = self.new_connection_form.as_ref()?;
+
+        Some(
+            container(new_connection_form_view(form))
+                .width(Length::Fixed(360.0))
+                .padding(style::space::MD)
+                .style(style::panel)
+                .into(),
+        )
     }
 
     fn connections_list<'a>(&'a self, shared: &'a GuiState) -> Element<'a, Message> {
