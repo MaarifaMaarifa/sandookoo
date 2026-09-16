@@ -73,7 +73,7 @@ impl Gui {
 
         let panels = row![
             self.connections.view(&self.state).map(Message::Connections),
-            self.query.view().map(Message::Query),
+            self.query.view(&self.theme).map(Message::Query),
         ]
         .spacing(style::space::MD);
 

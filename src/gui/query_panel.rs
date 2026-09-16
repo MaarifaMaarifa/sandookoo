@@ -68,7 +68,7 @@ impl State {
         Task::none()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self, theme: &iced::Theme) -> Element<'_, Message> {
         let editor = container(
             column![
                 row![
@@ -83,7 +83,7 @@ impl State {
                 text_editor(&self.query_editor)
                     .placeholder("Write your query here...")
                     .on_action(Message::EditorAction)
-                    .highlight("sql", iced::highlighter::Theme::SolarizedDark)
+                    .highlight("sql", style::highlighter_theme(theme))
                     .padding(style::space::SM)
                     .style(style::editor)
                     .height(Length::Fill),

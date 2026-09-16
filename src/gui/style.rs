@@ -184,6 +184,32 @@ pub fn field(theme: &Theme, status: text_input::Status) -> text_input::Style {
     }
 }
 
+/// Picks the SQL syntax-highlighting theme that best matches the app
+/// theme. `iced_highlighter` only ships a handful of themes, so several
+/// app themes share one; anything without an obvious match falls back to
+/// whichever highlighter theme fits its light/dark mode.
+pub fn highlighter_theme(theme: &Theme) -> iced::highlighter::Theme {
+    use iced::highlighter::Theme as Highlighter;
+
+    match theme {
+        Theme::SolarizedDark => Highlighter::SolarizedDark,
+        Theme::CatppuccinMocha | Theme::CatppuccinMacchiato | Theme::CatppuccinFrappe => {
+            Highlighter::Base16Mocha
+        }
+        Theme::Nord
+        | Theme::TokyoNight
+        | Theme::TokyoNightStorm
+        | Theme::KanagawaWave
+        | Theme::KanagawaDragon
+        | Theme::KanagawaLotus => Highlighter::Base16Ocean,
+        Theme::GruvboxDark | Theme::Dracula | Theme::Moonfly | Theme::Nightfly => {
+            Highlighter::Base16Eighties
+        }
+        _ if theme.extended_palette().is_dark => Highlighter::Base16Mocha,
+        _ => Highlighter::InspiredGitHub,
+    }
+}
+
 /// A rounded, slightly sunken surface for the SQL editor, set apart from
 /// the panel background it sits in.
 pub fn editor(theme: &Theme, status: text_editor::Status) -> text_editor::Style {
