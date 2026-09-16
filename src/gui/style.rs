@@ -20,7 +20,7 @@ pub mod space {
 pub mod radius {
     pub const SM: f32 = 6.0;
     pub const MD: f32 = 10.0;
-    pub const LG: f32 = 14.0;
+    pub const LG: f32 = 5.0;
 }
 
 /// The raised "card" look shared by the sidebar and the editor/results
