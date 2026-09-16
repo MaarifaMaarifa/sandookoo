@@ -6,6 +6,8 @@ mod query_panel;
 mod state;
 pub mod style;
 
+use crate::settings::Settings;
+
 pub struct Gui {
     state: state::GuiState,
     connections: connections_panel::State,
@@ -21,13 +23,25 @@ pub enum Message {
 }
 
 impl Gui {
-    pub fn new() -> Self {
-        Self {
-            state: state::GuiState::new(),
-            connections: connections_panel::State::new(),
-            query: query_panel::State::new(),
-            theme: Theme::CatppuccinMocha,
-        }
+    pub fn new() -> (Self, Task<Message>) {
+        let settings = Settings::load();
+        let theme = Theme::ALL
+            .iter()
+            .find(|theme| theme.to_string() == settings.theme)
+            .cloned()
+            .unwrap_or(Theme::CatppuccinMocha);
+        let (connections, reconnect_task) =
+            connections_panel::State::new(settings.connections.clone());
+
+        (
+            Self {
+                state: state::GuiState::new(settings),
+                connections,
+                query: query_panel::State::new(),
+                theme,
+            },
+            reconnect_task.map(Message::Connections),
+        )
     }
 
     pub fn theme(&self) -> Theme {
@@ -42,7 +56,8 @@ impl Gui {
                 .map(Message::Connections),
             Message::Query(message) => self.query.update(message, &self.state).map(Message::Query),
             Message::ThemeSelected(theme) => {
-                self.theme = theme;
+                self.theme = theme.clone();
+                self.state.set_theme(&theme);
                 Task::none()
             }
         }

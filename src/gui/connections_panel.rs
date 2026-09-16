@@ -2,8 +2,9 @@ use iced::widget::{button, center, column, container, row, scrollable, text, tex
 use iced::{Alignment, Color, Element, Length, Task};
 use sea_orm::DatabaseConnection;
 
-use super::state::{DatabaseConfig, Databases, GuiState, GuiStateError};
+use super::state::{Databases, GuiState, GuiStateError};
 use super::style;
+use crate::settings::{self, ConnectionProfile};
 
 #[derive(Default)]
 pub struct NewConnectionForm {
@@ -43,12 +44,23 @@ pub enum Message {
     PasswordChanged(String),
     DatabaseChanged(String),
     Submit,
-    ConnectionEstablished(String, Result<DatabaseConnection, GuiStateError>),
+    ConnectionEstablished(ConnectionProfile, Result<DatabaseConnection, GuiStateError>),
 }
 
 impl State {
-    pub fn new() -> Self {
-        Self::default()
+    /// Builds the panel and, for each connection profile saved from a
+    /// previous session, a task that looks up its password in the keychain
+    /// and reconnects automatically.
+    pub fn new(saved_connections: Vec<ConnectionProfile>) -> (Self, Task<Message>) {
+        let reconnects = saved_connections.into_iter().filter_map(|profile| {
+            let password = settings::load_password(&profile.name).ok()?;
+            Some(Task::perform(
+                establish(profile, password),
+                |(profile, result)| Message::ConnectionEstablished(profile, result),
+            ))
+        });
+
+        (Self::default(), Task::batch(reconnects))
     }
 
     /// `shared` is the state this panel reads/mutates in common with the
@@ -93,9 +105,9 @@ impl State {
             }
             Message::Submit => {
                 return match self.validate(shared) {
-                    Ok((name, config)) => {
-                        Task::perform(Databases::connect(config), move |result| {
-                            Message::ConnectionEstablished(name.clone(), result)
+                    Ok((profile, password)) => {
+                        Task::perform(establish(profile, password), |(profile, result)| {
+                            Message::ConnectionEstablished(profile, result)
                         })
                     }
                     Err(error) => {
@@ -104,9 +116,10 @@ impl State {
                     }
                 };
             }
-            Message::ConnectionEstablished(name, result) => match result {
+            Message::ConnectionEstablished(profile, result) => match result {
                 Ok(connection) => {
-                    shared.add_connection(name, connection);
+                    shared.add_connection(profile.name.clone(), connection);
+                    shared.remember_connection(profile);
                     self.new_connection_form = None;
                 }
                 Err(_) => self.set_error("Failed to connect to the database.".to_string()),
@@ -122,9 +135,9 @@ impl State {
         }
     }
 
-    /// Validates the open form and, if valid, returns the connection name
-    /// together with the config to connect with.
-    fn validate(&self, shared: &GuiState) -> Result<(String, DatabaseConfig), String> {
+    /// Validates the open form and, if valid, returns the connection
+    /// profile together with the password to connect with.
+    fn validate(&self, shared: &GuiState) -> Result<(ConnectionProfile, String), String> {
         let form = self
             .new_connection_form
             .as_ref()
@@ -155,14 +168,14 @@ impl State {
         }
 
         Ok((
-            name,
-            DatabaseConfig {
+            ConnectionProfile {
+                name,
                 host,
                 port,
                 username: form.username.trim().to_string(),
-                password: form.password.clone(),
                 database,
             },
+            form.password.clone(),
         ))
     }
 
@@ -215,6 +228,28 @@ impl State {
         .spacing(style::space::MD)
         .into()
     }
+}
+
+/// Connects and, on success, saves the password to the OS keychain. The
+/// password is never carried in a `Message`; it only ever lives in this
+/// task's local state.
+async fn establish(
+    profile: ConnectionProfile,
+    password: String,
+) -> (ConnectionProfile, Result<DatabaseConnection, GuiStateError>) {
+    let result = Databases::connect(profile.clone(), password.clone()).await;
+
+    if result.is_ok() {
+        let name = profile.name.clone();
+        let saved =
+            tokio::task::spawn_blocking(move || settings::save_password(&name, &password)).await;
+
+        if let Ok(Err(error)) = saved {
+            eprintln!("failed to save password to the keychain: {error}");
+        }
+    }
+
+    (profile, result)
 }
 
 fn new_connection_form_view(form: &NewConnectionForm) -> Element<'_, Message> {

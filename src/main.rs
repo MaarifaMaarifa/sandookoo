@@ -1,5 +1,6 @@
 mod database;
 mod gui;
+mod settings;
 
 fn main() -> iced::Result {
     iced::application(gui::Gui::new, gui::Gui::update, gui::Gui::view)

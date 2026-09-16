@@ -2,17 +2,11 @@ use std::collections::HashMap;
 
 use sea_orm::DatabaseConnection;
 
+use crate::settings::{ConnectionProfile, Settings};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GuiStateError {
     DatabaseConnectionError,
-}
-
-pub struct DatabaseConfig {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-    pub database: String,
 }
 
 pub struct Databases {
@@ -42,10 +36,13 @@ impl Databases {
         self.databases.keys()
     }
 
-    pub async fn connect(config: DatabaseConfig) -> Result<DatabaseConnection, GuiStateError> {
+    pub async fn connect(
+        profile: ConnectionProfile,
+        password: String,
+    ) -> Result<DatabaseConnection, GuiStateError> {
         let postgres_url = format!(
             "postgres://{}:{}@{}:{}/{}",
-            config.username, config.password, config.host, config.port, config.database
+            profile.username, password, profile.host, profile.port, profile.database
         );
 
         sea_orm::Database::connect(postgres_url)
@@ -59,13 +56,15 @@ impl Databases {
 pub struct GuiState {
     databases: Databases,
     selected_connection: Option<String>,
+    settings: Settings,
 }
 
 impl GuiState {
-    pub fn new() -> Self {
+    pub fn new(settings: Settings) -> Self {
         Self {
             databases: Databases::new(),
             selected_connection: None,
+            settings,
         }
     }
 
@@ -85,5 +84,22 @@ impl GuiState {
     pub fn add_connection(&mut self, name: String, connection: DatabaseConnection) {
         self.databases.insert(name.clone(), connection);
         self.selected_connection = Some(name);
+    }
+
+    /// Saves a connection's metadata so it reconnects automatically next
+    /// launch. Errors are non-fatal: the connection still works this
+    /// session even if it can't be persisted.
+    pub fn remember_connection(&mut self, profile: ConnectionProfile) {
+        if let Err(error) = self.settings.upsert_connection(profile) {
+            eprintln!("failed to save connection settings: {error}");
+        }
+    }
+
+    /// Updates and persists the selected theme.
+    pub fn set_theme(&mut self, theme: &iced::Theme) {
+        self.settings.theme = theme.to_string();
+        if let Err(error) = self.settings.save() {
+            eprintln!("failed to save theme setting: {error}");
+        }
     }
 }
