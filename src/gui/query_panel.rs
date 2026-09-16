@@ -79,6 +79,7 @@ impl State {
                 text_editor(&self.query_editor)
                     .placeholder("Write your query here...")
                     .on_action(Message::EditorAction)
+                    .highlight("sql", iced::highlighter::Theme::SolarizedDark)
                     .height(Length::Fill),
             ]
             .spacing(8),
