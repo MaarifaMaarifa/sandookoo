@@ -3,6 +3,7 @@ use iced::{Alignment, Element, Length, Task};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, Statement};
 
 use super::state::GuiState;
+use super::style;
 
 #[derive(Debug, Clone)]
 pub enum QueryOutcome {
@@ -72,31 +73,37 @@ impl State {
             column![
                 row![
                     text("Query").size(16),
-                    button(text("Run")).on_press(Message::Run)
+                    button(text("Run"))
+                        .padding([style::space::XS, style::space::SM])
+                        .style(style::primary_button)
+                        .on_press(Message::Run)
                 ]
-                .spacing(8)
+                .spacing(style::space::SM)
                 .align_y(Alignment::Center),
                 text_editor(&self.query_editor)
                     .placeholder("Write your query here...")
                     .on_action(Message::EditorAction)
                     .highlight("sql", iced::highlighter::Theme::SolarizedDark)
+                    .padding(style::space::SM)
+                    .style(style::editor)
                     .height(Length::Fill),
             ]
-            .spacing(8),
+            .spacing(style::space::SM),
         )
-        .padding(8)
+        .padding(style::space::MD)
         .height(Length::FillPortion(2))
-        .style(container::bordered_box);
+        .style(style::panel);
 
         let results = container(results_view(&self.query_result))
             .width(Length::Fill)
             .height(Length::FillPortion(1))
-            .padding(8)
-            .style(container::bordered_box);
+            .padding(style::space::MD)
+            .style(style::panel);
 
         column![editor, results]
             .width(Length::Fill)
             .height(Length::Fill)
+            .spacing(style::space::MD)
             .into()
     }
 }

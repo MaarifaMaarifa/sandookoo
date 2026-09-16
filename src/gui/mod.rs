@@ -4,6 +4,7 @@ use iced::{Element, Task};
 mod connections_panel;
 mod query_panel;
 mod state;
+pub mod style;
 
 pub struct Gui {
     state: state::GuiState,
@@ -41,6 +42,8 @@ impl Gui {
             self.connections.view(&self.state).map(Message::Connections),
             self.query.view().map(Message::Query),
         ]
+        .spacing(style::space::MD)
+        .padding(style::space::LG)
         .into()
     }
 }

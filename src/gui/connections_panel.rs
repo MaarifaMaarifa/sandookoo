@@ -3,6 +3,7 @@ use iced::{Alignment, Color, Element, Length, Task};
 use sea_orm::DatabaseConnection;
 
 use super::state::{DatabaseConfig, Databases, GuiState, GuiStateError};
+use super::style;
 
 #[derive(Default)]
 pub struct NewConnectionForm {
@@ -174,8 +175,8 @@ impl State {
         container(content)
             .width(Length::Fixed(240.0))
             .height(Length::Fill)
-            .padding(8)
-            .style(container::bordered_box)
+            .padding(style::space::MD)
+            .style(style::panel)
             .into()
     }
 
@@ -187,11 +188,8 @@ impl State {
                 let is_selected = shared.selected_connection() == Some(name.as_str());
                 button(text(name.clone()))
                     .width(Length::Fill)
-                    .style(if is_selected {
-                        button::primary
-                    } else {
-                        button::secondary
-                    })
+                    .padding([style::space::SM, style::space::MD])
+                    .style(style::connection_item(is_selected))
                     .on_press(Message::Select(name.clone()))
                     .into()
             })
@@ -200,50 +198,76 @@ impl State {
         let list: Element<'a, Message> = if names.is_empty() {
             center(text("No connections yet")).into()
         } else {
-            scrollable(column(names).spacing(4)).into()
+            scrollable(column(names).spacing(style::space::XS)).into()
         };
 
         column![
             row![
                 text("Connections").size(16).width(Length::Fill),
-                button(text("+ New")).on_press(Message::OpenNewConnectionForm),
+                button(text("+ New"))
+                    .padding([style::space::XS, style::space::SM])
+                    .style(style::primary_button)
+                    .on_press(Message::OpenNewConnectionForm),
             ]
             .align_y(Alignment::Center),
             list,
         ]
-        .spacing(8)
+        .spacing(style::space::MD)
         .into()
     }
 }
 
 fn new_connection_form_view(form: &NewConnectionForm) -> Element<'_, Message> {
-    let mut content = column![text("New Connection").size(16)].spacing(8);
+    let mut content = column![text("New Connection").size(16)].spacing(style::space::SM);
 
-    content = content.push(text_input("Name", &form.name).on_input(Message::NameChanged));
-    content = content.push(text_input("Host", &form.host).on_input(Message::HostChanged));
-    content = content.push(text_input("Port", &form.port).on_input(Message::PortChanged));
-    content =
-        content.push(text_input("Username", &form.username).on_input(Message::UsernameChanged));
+    content = content.push(
+        text_input("Name", &form.name)
+            .style(style::field)
+            .on_input(Message::NameChanged),
+    );
+    content = content.push(
+        text_input("Host", &form.host)
+            .style(style::field)
+            .on_input(Message::HostChanged),
+    );
+    content = content.push(
+        text_input("Port", &form.port)
+            .style(style::field)
+            .on_input(Message::PortChanged),
+    );
+    content = content.push(
+        text_input("Username", &form.username)
+            .style(style::field)
+            .on_input(Message::UsernameChanged),
+    );
     content = content.push(
         text_input("Password", &form.password)
             .secure(true)
+            .style(style::field)
             .on_input(Message::PasswordChanged),
     );
-    content =
-        content.push(text_input("Database", &form.database).on_input(Message::DatabaseChanged));
+    content = content.push(
+        text_input("Database", &form.database)
+            .style(style::field)
+            .on_input(Message::DatabaseChanged),
+    );
 
     if let Some(error) = &form.error {
-        content = content.push(text(error.clone()).color(Color::from_rgb(0.8, 0.2, 0.2)));
+        content = content.push(text(error.clone()).color(Color::from_rgb(0.94, 0.4, 0.4)));
     }
 
     content = content.push(
         row![
-            button(text("Connect")).on_press(Message::Submit),
+            button(text("Connect"))
+                .padding([style::space::XS, style::space::SM])
+                .style(style::primary_button)
+                .on_press(Message::Submit),
             button(text("Cancel"))
-                .style(button::secondary)
+                .padding([style::space::XS, style::space::SM])
+                .style(style::ghost_button)
                 .on_press(Message::CancelNewConnectionForm),
         ]
-        .spacing(8),
+        .spacing(style::space::SM),
     );
 
     scrollable(content).into()
