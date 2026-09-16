@@ -1,10 +1,10 @@
 use iced::widget::{button, container, text_editor, text_input};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
-/// The app-wide theme. Kept in one place so every panel renders
-/// consistently.
-pub fn theme(_gui: &super::Gui) -> Theme {
-    Theme::CatppuccinMocha
+/// The app-wide theme. Reads the theme the user picked in the toolbar, kept
+/// on `Gui` since it's needed here, at the top level.
+pub fn theme(gui: &super::Gui) -> Theme {
+    gui.theme()
 }
 
 /// A consistent spacing scale, used instead of scattering magic numbers
