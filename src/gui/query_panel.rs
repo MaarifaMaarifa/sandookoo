@@ -145,15 +145,26 @@ async fn run_query(connection: DatabaseConnection, sql: String) -> QueryOutcome 
 
     if is_select {
         match connection.query_all_raw(statement).await {
-            Ok(rows) => rows_to_outcome(rows),
-            Err(error) => QueryOutcome::Message(format!("Query failed: {error}")),
+            Ok(rows) => {
+                tracing::info!(rows = rows.len(), "query returned rows");
+                rows_to_outcome(rows)
+            }
+            Err(error) => {
+                tracing::warn!(%error, "query failed");
+                QueryOutcome::Message(format!("Query failed: {error}"))
+            }
         }
     } else {
         match connection.execute_raw(statement).await {
             Ok(result) => {
-                QueryOutcome::Message(format!("{} row(s) affected.", result.rows_affected()))
+                let rows_affected = result.rows_affected();
+                tracing::info!(rows_affected, "query executed");
+                QueryOutcome::Message(format!("{rows_affected} row(s) affected."))
             }
-            Err(error) => QueryOutcome::Message(format!("Query failed: {error}")),
+            Err(error) => {
+                tracing::warn!(%error, "query failed");
+                QueryOutcome::Message(format!("Query failed: {error}"))
+            }
         }
     }
 }

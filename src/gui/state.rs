@@ -45,9 +45,10 @@ impl Databases {
             profile.username, password, profile.host, profile.port, profile.database
         );
 
-        sea_orm::Database::connect(postgres_url)
-            .await
-            .map_err(|_| GuiStateError::DatabaseConnectionError)
+        sea_orm::Database::connect(postgres_url).await.map_err(|error| {
+            tracing::warn!(connection = %profile.name, host = %profile.host, %error, "failed to connect to database");
+            GuiStateError::DatabaseConnectionError
+        })
     }
 }
 
@@ -82,6 +83,7 @@ impl GuiState {
 
     /// Registers a newly established connection and makes it the selected one.
     pub fn add_connection(&mut self, name: String, connection: DatabaseConnection) {
+        tracing::info!(connection = %name, "connected to database");
         self.databases.insert(name.clone(), connection);
         self.selected_connection = Some(name);
     }
@@ -91,7 +93,7 @@ impl GuiState {
     /// session even if it can't be persisted.
     pub fn remember_connection(&mut self, profile: ConnectionProfile) {
         if let Err(error) = self.settings.upsert_connection(profile) {
-            eprintln!("failed to save connection settings: {error}");
+            tracing::warn!(%error, "failed to save connection settings");
         }
     }
 
@@ -99,7 +101,7 @@ impl GuiState {
     pub fn set_theme(&mut self, theme: &iced::Theme) {
         self.settings.theme = theme.to_string();
         if let Err(error) = self.settings.save() {
-            eprintln!("failed to save theme setting: {error}");
+            tracing::warn!(%error, "failed to save theme setting");
         }
     }
 }

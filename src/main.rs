@@ -7,6 +7,13 @@ mod settings;
 pub const APP_NAME: &str = env!("CARGO_PKG_NAME");
 
 fn main() -> iced::Result {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+
     iced::application(gui::Gui::new, gui::Gui::update, gui::Gui::view)
         .title(APP_NAME)
         .theme(gui::style::theme)

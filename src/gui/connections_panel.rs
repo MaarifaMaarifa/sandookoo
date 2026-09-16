@@ -55,7 +55,18 @@ impl State {
     /// and reconnects automatically.
     pub fn new(saved_connections: Vec<ConnectionProfile>) -> (Self, Task<Message>) {
         let reconnects = saved_connections.into_iter().filter_map(|profile| {
-            let password = settings::load_password(&profile.name).ok()?;
+            let password = match settings::load_password(&profile.name) {
+                Ok(password) => password,
+                Err(error) => {
+                    tracing::warn!(
+                        connection = %profile.name,
+                        %error,
+                        "failed to load saved password from the keychain; skipping reconnect"
+                    );
+                    return None;
+                }
+            };
+
             Some(Task::perform(
                 establish(profile, password),
                 |(profile, result)| Message::ConnectionEstablished(profile, result),
@@ -261,7 +272,7 @@ async fn establish(
             tokio::task::spawn_blocking(move || settings::save_password(&name, &password)).await;
 
         if let Ok(Err(error)) = saved {
-            eprintln!("failed to save password to the keychain: {error}");
+            tracing::warn!(%error, "failed to save password to the keychain");
         }
     }
 
