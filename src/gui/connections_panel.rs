@@ -13,6 +13,7 @@ pub struct NewConnectionForm {
     pub port: String,
     pub username: String,
     pub password: String,
+    pub show_password: bool,
     pub database: String,
     pub error: Option<String>,
 }
@@ -42,6 +43,7 @@ pub enum Message {
     PortChanged(String),
     UsernameChanged(String),
     PasswordChanged(String),
+    TogglePasswordVisibility,
     DatabaseChanged(String),
     Submit,
     ConnectionEstablished(ConnectionProfile, Result<DatabaseConnection, GuiStateError>),
@@ -96,6 +98,11 @@ impl State {
             Message::PasswordChanged(value) => {
                 if let Some(form) = self.new_connection_form.as_mut() {
                     form.password = value;
+                }
+            }
+            Message::TogglePasswordVisibility => {
+                if let Some(form) = self.new_connection_form.as_mut() {
+                    form.show_password = !form.show_password;
                 }
             }
             Message::DatabaseChanged(value) => {
@@ -285,10 +292,18 @@ fn new_connection_form_view(form: &NewConnectionForm) -> Element<'_, Message> {
             .on_input(Message::UsernameChanged),
     );
     content = content.push(
-        text_input("Password", &form.password)
-            .secure(true)
-            .style(style::field)
-            .on_input(Message::PasswordChanged),
+        row![
+            text_input("Password", &form.password)
+                .secure(!form.show_password)
+                .style(style::field)
+                .on_input(Message::PasswordChanged),
+            button(text(if form.show_password { "Hide" } else { "Show" }))
+                .padding([style::space::XS, style::space::SM])
+                .style(style::ghost_button)
+                .on_press(Message::TogglePasswordVisibility),
+        ]
+        .spacing(style::space::XS)
+        .align_y(Alignment::Center),
     );
     content = content.push(
         text_input("Database", &form.database)
