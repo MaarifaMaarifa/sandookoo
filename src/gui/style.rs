@@ -18,8 +18,8 @@ pub mod space {
 
 /// A consistent corner-radius scale.
 pub mod radius {
-    pub const SM: f32 = 6.0;
-    pub const MD: f32 = 10.0;
+    pub const SM: f32 = 2.0;
+    pub const MD: f32 = 3.0;
     pub const LG: f32 = 5.0;
 }
 
