@@ -133,6 +133,11 @@ fn results_view(outcome: &QueryOutcome) -> Element<'_, Message> {
     }
 }
 
+/// Row cap silently applied to a `SELECT`/`WITH` query that doesn't already
+/// specify its own `LIMIT`, so a mistyped query can't flood the results
+/// table (or the connection) with an entire table's worth of rows.
+const DEFAULT_ROW_LIMIT: u32 = 100;
+
 /// Runs `sql` against `connection` and turns the outcome into something the
 /// results panel can render. `SELECT`/`WITH` statements are fetched as rows;
 /// anything else is executed and reported as an affected-row count.
@@ -141,7 +146,13 @@ async fn run_query(connection: DatabaseConnection, sql: String) -> QueryOutcome 
     let lower = trimmed.to_ascii_lowercase();
     let is_select = lower.starts_with("select") || lower.starts_with("with");
 
-    let statement = Statement::from_string(DatabaseBackend::Postgres, trimmed.to_string());
+    let sql_to_run = if is_select {
+        ensure_row_limit(trimmed)
+    } else {
+        trimmed.to_string()
+    };
+
+    let statement = Statement::from_string(DatabaseBackend::Postgres, sql_to_run);
 
     if is_select {
         match connection.query_all_raw(statement).await {
@@ -166,6 +177,22 @@ async fn run_query(connection: DatabaseConnection, sql: String) -> QueryOutcome 
                 QueryOutcome::Message(format!("Query failed: {error}"))
             }
         }
+    }
+}
+
+/// Appends `LIMIT {DEFAULT_ROW_LIMIT}` to `sql` unless it already has a
+/// `LIMIT` clause somewhere in it. This is a plain substring check, not a
+/// real SQL parse, so a `LIMIT` mentioned inside a string literal or a
+/// column named e.g. `limit_reached` is enough to skip it — an acceptable
+/// trade-off for a simple, low-risk safety net rather than no cap at all.
+fn ensure_row_limit(sql: &str) -> String {
+    if sql.to_ascii_lowercase().contains("limit") {
+        return sql.to_string();
+    }
+
+    match sql.strip_suffix(';') {
+        Some(body) => format!("{} LIMIT {DEFAULT_ROW_LIMIT};", body.trim_end()),
+        None => format!("{sql} LIMIT {DEFAULT_ROW_LIMIT}"),
     }
 }
 
