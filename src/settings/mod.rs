@@ -17,6 +17,12 @@ pub use credentials::{load_password, save_password};
 pub struct Settings {
     pub theme: String,
     pub connections: Vec<ConnectionProfile>,
+    /// Font family for the app's UI text. `None` means the system default.
+    /// Applied once at startup — changing it takes effect on next launch.
+    pub ui_font: Option<String>,
+    /// Font family for the SQL editor. `None` means the built-in monospace
+    /// font. Applied live: changing it updates the editor immediately.
+    pub editor_font: Option<String>,
 }
 
 impl Default for Settings {
@@ -24,6 +30,8 @@ impl Default for Settings {
         Self {
             theme: "Catppuccin Mocha".to_string(),
             connections: Vec::new(),
+            ui_font: None,
+            editor_font: None,
         }
     }
 }

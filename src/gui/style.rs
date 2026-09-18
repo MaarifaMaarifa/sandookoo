@@ -1,10 +1,23 @@
 use iced::widget::{button, container, text_editor, text_input};
-use iced::{Background, Border, Color, Shadow, Theme, Vector};
+use iced::{Background, Border, Color, Font, Shadow, Theme, Vector};
 
 /// The app-wide theme. Reads the theme the user picked in the toolbar, kept
 /// on `Gui` since it's needed here, at the top level.
 pub fn theme(gui: &super::Gui) -> Theme {
     gui.theme()
+}
+
+/// Resolves a user-chosen font family name into an [`iced::Font`], falling
+/// back to `fallback` when no name is set (or it's blank).
+///
+/// Leaks the name into a `&'static str`, since `Font` requires one. That's
+/// only acceptable because this runs once per *change* to a font setting —
+/// at startup and whenever the user updates one — never on every render.
+pub fn resolve_font(name: Option<&str>, fallback: Font) -> Font {
+    match name.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => Font::with_name(Box::leak(name.to_string().into_boxed_str())),
+        None => fallback,
+    }
 }
 
 /// A consistent spacing scale, used instead of scattering magic numbers

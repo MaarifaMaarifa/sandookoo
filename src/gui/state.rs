@@ -58,14 +58,43 @@ pub struct GuiState {
     databases: Databases,
     selected_connection: Option<String>,
     settings: Settings,
+    /// Resolved from `settings.editor_font`, and re-resolved whenever it
+    /// changes — unlike the UI font, this one applies live.
+    editor_font: iced::Font,
 }
 
 impl GuiState {
     pub fn new(settings: Settings) -> Self {
+        let editor_font =
+            super::style::resolve_font(settings.editor_font.as_deref(), iced::Font::MONOSPACE);
+
         Self {
             databases: Databases::new(),
             selected_connection: None,
             settings,
+            editor_font,
+        }
+    }
+
+    pub fn editor_font(&self) -> iced::Font {
+        self.editor_font
+    }
+
+    /// Persists the UI font choice. Takes effect on next launch: see the
+    /// comment in `main.rs` for why it can't apply live.
+    pub fn set_ui_font(&mut self, name: Option<String>) {
+        self.settings.ui_font = name;
+        if let Err(error) = self.settings.save() {
+            tracing::warn!(%error, "failed to save UI font setting");
+        }
+    }
+
+    /// Persists the editor font choice and applies it immediately.
+    pub fn set_editor_font(&mut self, name: Option<String>) {
+        self.editor_font = super::style::resolve_font(name.as_deref(), iced::Font::MONOSPACE);
+        self.settings.editor_font = name;
+        if let Err(error) = self.settings.save() {
+            tracing::warn!(%error, "failed to save editor font setting");
         }
     }
 

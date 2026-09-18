@@ -1,4 +1,6 @@
-use iced::widget::{center, column, container, mouse_area, opaque, pick_list, row, stack, text};
+use iced::widget::{
+    center, column, container, mouse_area, opaque, pick_list, row, stack, text, text_input,
+};
 use iced::{Alignment, Color, Element, Task, Theme};
 
 mod connections_panel;
@@ -13,6 +15,8 @@ pub struct Gui {
     connections: connections_panel::State,
     query: query_panel::State,
     theme: Theme,
+    ui_font_input: String,
+    editor_font_input: String,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +24,10 @@ pub enum Message {
     Connections(connections_panel::Message),
     Query(query_panel::Message),
     ThemeSelected(Theme),
+    UiFontChanged(String),
+    UiFontSubmitted,
+    EditorFontChanged(String),
+    EditorFontSubmitted,
 }
 
 impl Gui {
@@ -32,6 +40,8 @@ impl Gui {
             .unwrap_or(Theme::CatppuccinMocha);
         let (connections, reconnect_task) =
             connections_panel::State::new(settings.connections.clone());
+        let ui_font_input = settings.ui_font.clone().unwrap_or_default();
+        let editor_font_input = settings.editor_font.clone().unwrap_or_default();
 
         (
             Self {
@@ -39,6 +49,8 @@ impl Gui {
                 connections,
                 query: query_panel::State::new(),
                 theme,
+                ui_font_input,
+                editor_font_input,
             },
             reconnect_task.map(Message::Connections),
         )
@@ -60,6 +72,23 @@ impl Gui {
                 self.state.set_theme(&theme);
                 Task::none()
             }
+            Message::UiFontChanged(value) => {
+                self.ui_font_input = value;
+                Task::none()
+            }
+            Message::UiFontSubmitted => {
+                self.state.set_ui_font(non_empty(&self.ui_font_input));
+                Task::none()
+            }
+            Message::EditorFontChanged(value) => {
+                self.editor_font_input = value;
+                Task::none()
+            }
+            Message::EditorFontSubmitted => {
+                self.state
+                    .set_editor_font(non_empty(&self.editor_font_input));
+                Task::none()
+            }
         }
     }
 
@@ -67,13 +96,27 @@ impl Gui {
         let toolbar = row![
             text("Theme"),
             pick_list(Theme::ALL, Some(&self.theme), Message::ThemeSelected),
+            text("UI font (restart to apply)"),
+            text_input("System default", &self.ui_font_input)
+                .width(160)
+                .style(style::field)
+                .on_input(Message::UiFontChanged)
+                .on_submit(Message::UiFontSubmitted),
+            text("Editor font"),
+            text_input("Monospace", &self.editor_font_input)
+                .width(160)
+                .style(style::field)
+                .on_input(Message::EditorFontChanged)
+                .on_submit(Message::EditorFontSubmitted),
         ]
         .spacing(style::space::SM)
         .align_y(Alignment::Center);
 
         let panels = row![
             self.connections.view(&self.state).map(Message::Connections),
-            self.query.view(&self.theme).map(Message::Query),
+            self.query
+                .view(&self.theme, self.state.editor_font())
+                .map(Message::Query),
         ]
         .spacing(style::space::MD);
 
@@ -91,6 +134,13 @@ impl Gui {
             None => base,
         }
     }
+}
+
+/// Trims `value` and turns it into `Some` unless it's empty, for the font
+/// inputs: an empty field means "use the default", not a font named "".
+fn non_empty(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 /// Layers `content` centered over `base`, dimmed by a click-to-dismiss
