@@ -119,9 +119,10 @@ pub fn ghost_button(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-/// A connection entry in the sidebar list: a filled pill when selected,
-/// otherwise a plain row that only highlights on hover.
-pub fn connection_item(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+/// An entry in a selectable list (the connections sidebar, the settings
+/// categories): a filled pill when selected, otherwise a plain row that
+/// only highlights on hover.
+pub fn list_item(selected: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let palette = theme.extended_palette();
 

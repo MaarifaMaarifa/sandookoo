@@ -229,7 +229,7 @@ impl State {
                 button(text(name.clone()))
                     .width(Length::Fill)
                     .padding([style::space::SM, style::space::MD])
-                    .style(style::connection_item(is_selected))
+                    .style(style::list_item(is_selected))
                     .on_press(Message::Select(name.clone()))
                     .into()
             })
